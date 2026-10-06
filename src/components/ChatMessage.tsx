@@ -12,10 +12,15 @@ import {
   FileText, 
   ShoppingCart, 
   Package, 
+  Users,
   ChevronDown, 
   ChevronUp, 
   Send,
-  MessageSquare
+  MessageSquare,
+  Sparkles,
+  Phone,
+  Mail,
+  MapPin
 } from 'lucide-react';
 import { Message, ToolCall, OdooEntityPreview } from '@/types';
 
@@ -52,7 +57,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onOdooAction 
         </div>
       )}
 
-      <div className={`flex flex-col gap-2 max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
+      <div className={`flex flex-col gap-2 max-w-[90%] md:max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
         {/* Tool Calls Accordion (if any) */}
         {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
           <div className="w-full space-y-1.5 mb-1">
@@ -77,7 +82,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onOdooAction 
                       )}
                       {tc.status === 'running' && (
                         <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded animate-pulse">
-                          <Clock className="w-2.5 h-2.5" /> Ejecutando...
+                          <Clock className="w-2.5 h-2.5" /> Ejecutando MCP...
                         </span>
                       )}
                     </div>
@@ -98,7 +103,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onOdooAction 
                       </div>
                       {tc.result && (
                         <div>
-                          <div className="text-slate-500 text-[10px] uppercase font-semibold mb-1">Respuesta MCP</div>
+                          <div className="text-slate-500 text-[10px] uppercase font-semibold mb-1">Respuesta Odoo MCP</div>
                           <pre className="text-emerald-300 bg-slate-900/80 p-2 rounded border border-slate-800 overflow-x-auto">
                             {JSON.stringify(tc.result, null, 2)}
                           </pre>
@@ -149,7 +154,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onOdooAction 
               <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 rounded-lg bg-purple-500/20 text-purple-400">
-                    {message.odooPreview.type === 'sale_order' ? (
+                    {message.odooPreview.type === 'contacts_list' || message.odooPreview.type === 'partner' ? (
+                      <Users className="w-4 h-4" />
+                    ) : message.odooPreview.type === 'sale_order' ? (
                       <ShoppingCart className="w-4 h-4" />
                     ) : (
                       <Package className="w-4 h-4" />
@@ -157,7 +164,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onOdooAction 
                   </div>
                   <div>
                     <h4 className="text-xs font-semibold text-slate-100">{message.odooPreview.name}</h4>
-                    <span className="text-[10px] text-purple-300 uppercase tracking-wider font-mono">Odoo ERP Live Widget</span>
+                    <span className="text-[10px] text-purple-300 uppercase tracking-wider font-mono">Odoo 20 AI Widget</span>
                   </div>
                 </div>
                 {message.odooPreview.status && (
@@ -167,19 +174,46 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onOdooAction 
                 )}
               </div>
 
-              {/* Details grid */}
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {Object.entries(message.odooPreview.details).map(([k, v]) => (
-                  <div key={k} className="flex flex-col">
-                    <span className="text-[10px] text-slate-400">{k}</span>
-                    <span className="font-medium text-slate-200 truncate">{String(v)}</span>
+              {/* If it's a contacts list with items */}
+              {message.odooPreview.type === 'contacts_list' && message.odooPreview.items && (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {message.odooPreview.items.slice(0, 4).map((pt: any) => (
+                      <div key={pt.id} className="p-2.5 rounded-lg bg-slate-900 border border-slate-800/80 text-xs flex flex-col justify-between">
+                        <div>
+                          <div className="font-semibold text-slate-200">{pt.name}</div>
+                          <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-1">
+                            <Mail className="w-3 h-3 text-cyan-400" /> {pt.email}
+                          </div>
+                          <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                            <Phone className="w-3 h-3 text-emerald-400" /> {pt.phone}
+                          </div>
+                        </div>
+                        <div className="mt-2 pt-1 border-t border-slate-800 flex items-center justify-between text-[10px]">
+                          <span className="text-slate-500">Facturación</span>
+                          <span className="font-bold text-emerald-400">{pt.totalInvoiced?.toLocaleString('es-ES')} €</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
+
+              {/* Details grid */}
+              {message.odooPreview.details && (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {Object.entries(message.odooPreview.details).map(([k, v]) => (
+                    <div key={k} className="flex flex-col">
+                      <span className="text-[10px] text-slate-400">{k}</span>
+                      <span className="font-medium text-slate-200 truncate">{String(v)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Action Buttons */}
               {message.odooPreview.actions && message.odooPreview.actions.length > 0 && (
-                <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80">
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80 flex-wrap">
                   {message.odooPreview.actions.map((act, i) => (
                     <button
                       key={i}

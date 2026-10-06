@@ -12,10 +12,11 @@ export interface ToolCall {
 }
 
 export interface OdooEntityPreview {
-  type: 'sale_order' | 'invoice' | 'product' | 'partner' | 'stock';
+  type: 'sale_order' | 'invoice' | 'product' | 'partner' | 'stock' | 'contacts_list' | 'lead' | 'task' | 'employee' | 'meeting';
   id: string | number;
   name: string;
   details: Record<string, any>;
+  items?: any[];
   status?: string;
   total?: number;
   currency?: string;
@@ -49,6 +50,9 @@ export interface OdooPartner {
   email: string;
   phone: string;
   city: string;
+  street?: string;
+  vat?: string;
+  isCompany?: boolean;
   totalInvoiced: number;
 }
 
@@ -85,10 +89,10 @@ export interface IntegrationChannel {
 export interface McpToolDefinition {
   name: string;
   description: string;
-  category: 'odoo' | 'whatsapp' | 'telegram' | 'cognitive_core';
+  category: string;
   parameters: {
     type: string;
-    properties: Record<string, { type: string; description: string; required?: boolean }>;
+    properties?: Record<string, any>;
     required?: string[];
   };
 }

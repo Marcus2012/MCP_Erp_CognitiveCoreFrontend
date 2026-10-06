@@ -37,13 +37,13 @@ export default function Home() {
   const [sessions, setSessions] = useState<ChatSession[]>(DEFAULT_SESSIONS);
   const [activeSessionId, setActiveSessionId] = useState<string>('session-1');
   const [backendOnline, setBackendOnline] = useState<boolean>(true);
-  
+
   // Active conversation state
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome-msg',
       role: 'assistant',
-      content: `¡Bienvenido a **Cognitive Core MCP Frontend**! 🚀\n\nEstoy conectado con tu backend para interactuar con **Odoo ERP v17** y tus canales de comunicación (**WhatsApp** y **Telegram**).\n\nPuedes pedirme verificar inventario, emitir presupuestos de venta o enviar notificaciones a clientes.`,
+      content: `¡Bienvenido a **Cognitive Core MCP Frontend**! 🚀\n\nEstoy conectado con tu backend para interactuar con **ERP Cognitive Core** y tus canales de comunicación (**WhatsApp** y **Telegram**).\n\nPuedes pedirme verificar inventario, emitir presupuestos de venta o enviar notificaciones a clientes.`,
       timestamp: '10:00',
     },
   ]);
@@ -107,11 +107,11 @@ export default function Home() {
             prev.map((m) =>
               m.id === assistantMsgId
                 ? {
-                    ...m,
-                    content: fullMsg.content,
-                    toolCalls: fullMsg.toolCalls || activeToolCalls,
-                    odooPreview: fullMsg.odooPreview,
-                  }
+                  ...m,
+                  content: fullMsg.content,
+                  toolCalls: fullMsg.toolCalls || activeToolCalls,
+                  odooPreview: fullMsg.odooPreview,
+                }
                 : m
             )
           );
