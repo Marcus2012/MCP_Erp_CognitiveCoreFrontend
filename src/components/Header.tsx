@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 interface HeaderProps {
-  currentTab: 'chat' | 'odoo' | 'channels' | 'mcp';
+  currentTab: 'chat' | 'odoo' | 'channels' | 'mcp' | 'theme';
   chatMode: 'general' | 'odoo' | 'omnichannel';
   setChatMode: (mode: 'general' | 'odoo' | 'omnichannel') => void;
   onRefreshBackend: () => void;
@@ -30,7 +30,9 @@ export const Header: React.FC<HeaderProps> = ({
       case 'chat':
         return 'Asistente Cognitivo & MCP Copilot';
       case 'odoo':
-        return 'Odoo ERP Workspace & Entidades';
+        return 'Odoo 20 Community Workspace';
+      case 'theme':
+        return 'Editor de Theme & Branding Odoo 20';
       case 'channels':
         return 'Hub de Mensajería: WhatsApp & Telegram';
       case 'mcp':

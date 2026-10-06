@@ -1,4 +1,4 @@
-import { Message, ToolCall, OdooEntityPreview, OdooPartner, OdooProduct, OdooSaleOrder, McpToolDefinition } from '@/types';
+import { Message, ToolCall, OdooEntityPreview, OdooPartner, OdooProduct, OdooSaleOrder, McpToolDefinition, OdooThemeBranding } from '@/types';
 
 function getApiEndpoint(path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
@@ -155,7 +155,41 @@ export async function executeMcpToolLive(toolName: string, args: Record<string, 
   return await res.json();
 }
 
-// 7. Check backend connection
+// 7. Fetch Live Theme & Branding from Odoo 20
+export async function fetchLiveTheme(): Promise<OdooThemeBranding | null> {
+  try {
+    const endpoint = getApiEndpoint('/api/theme');
+    const res = await fetch(endpoint);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.error('Error fetching live theme from Odoo 20:', err);
+    return null;
+  }
+}
+
+// 8. Update Navbar Theme & Branding on Odoo 20
+export async function updateNavbarTheme(payload: Partial<OdooThemeBranding>): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const endpoint = getApiEndpoint('/api/theme/navbar');
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`HTTP ${res.status}: ${errText}`);
+    }
+    const data = await res.json();
+    return { success: true, data };
+  } catch (err: any) {
+    console.error('Error updating theme on Odoo 20:', err);
+    return { success: false, error: err.message || 'Error al actualizar tema' };
+  }
+}
+
+// 9. Check backend connection
 export async function checkBackendHealth(): Promise<{ online: boolean; odooConnected: boolean; details?: any }> {
   try {
     const endpoint = getApiEndpoint('/api/health');
@@ -385,7 +419,56 @@ export async function sendMessageToAgent(
       responseContent = `He consultado el módulo contable (**\`account.move\`**) en tu **Odoo 20 Community** y actualmente **no hay facturas emitidas**. Puedes emitir una factura directamente confirmando una orden de venta.`;
     }
   }
-  // Case E: WhatsApp / Telegram
+  // Case E: Theme & Branding
+  else if (
+    lower.includes('tema') || 
+    lower.includes('theme') || 
+    lower.includes('branding') || 
+    lower.includes('color') || 
+    lower.includes('colores') || 
+    lower.includes('navbar') || 
+    lower.includes('fuente') || 
+    lower.includes('tipografia')
+  ) {
+    const startTime = Date.now();
+    const tc: ToolCall = {
+      id: `tc-${Date.now()}`,
+      name: 'theme_get_branding',
+      args: {},
+      status: 'running',
+    };
+    callbacks.onToolCallStart?.(tc);
+
+    const liveTheme = await fetchLiveTheme();
+    tc.status = 'completed';
+    tc.executionTimeMs = Date.now() - startTime;
+    tc.result = liveTheme;
+    callbacks.onToolCallEnd?.(tc);
+    toolCalls.push(tc);
+
+    if (liveTheme) {
+      odooPreview = {
+        type: 'theme',
+        id: 'live-odoo-theme',
+        name: `Tema Odoo 20: ${liveTheme.name || 'Cognitive Core'}`,
+        status: 'Branding Activo',
+        details: {
+          'Color Primario': liveTheme.primary_color,
+          'Color Secundario': liveTheme.secondary_color,
+          'Tipografía': liveTheme.font || 'Lato',
+          'Email Primario': liveTheme.email_primary_color || '#FFFFFF',
+        },
+        actions: [
+          { label: 'Personalizar en Editor de Tema', action: 'open_theme_editor', variant: 'primary' },
+        ],
+      };
+
+      responseContent = `🎨 **Branding y Tema actual de Odoo 20 Community**:\n\n- 🏢 **Empresa:** **${liveTheme.name || 'Cognitive Core'}**\n- 🔵 **Color Primario (Navbar/Botones):** \`${liveTheme.primary_color}\`\n- 🔷 **Color Secundario (Acentos):** \`${liveTheme.secondary_color}\`\n- ✍️ **Fuente del Sistema:** \`${liveTheme.font || 'Lato'}\`\n\nPuedes personalizar la paleta de colores en tiempo real desde la nueva pestaña **🎨 Theme & Branding** o pedirme que aplique un nuevo color primario.`;
+    } else {
+      responseContent = `He consultado la configuración de Branding en Odoo 20. Puedes editar los colores y tipografía desde la pestaña **Theme & Branding**.`;
+    }
+  }
+  // Case F: WhatsApp / Telegram
   else if (
     lower.includes('whatsapp') || 
     lower.includes('telegram') || 

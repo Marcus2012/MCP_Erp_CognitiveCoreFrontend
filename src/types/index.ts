@@ -12,7 +12,7 @@ export interface ToolCall {
 }
 
 export interface OdooEntityPreview {
-  type: 'sale_order' | 'invoice' | 'product' | 'partner' | 'stock' | 'contacts_list' | 'lead' | 'task' | 'employee' | 'meeting';
+  type: 'sale_order' | 'invoice' | 'product' | 'partner' | 'stock' | 'contacts_list' | 'lead' | 'task' | 'employee' | 'meeting' | 'theme';
   id: string | number;
   name: string;
   details: Record<string, any>;
@@ -72,6 +72,19 @@ export interface OdooProduct {
   qtyAvailable: number;
   listPrice: number;
   category: string;
+}
+
+export interface OdooThemeBranding {
+  id?: number;
+  name?: string;
+  primary_color: string;
+  secondary_color: string;
+  email_primary_color?: string;
+  email_secondary_color?: string;
+  font?: string;
+  uses_default_logo?: boolean;
+  custom_css_installed?: boolean;
+  custom_css_active?: boolean;
 }
 
 export interface IntegrationChannel {

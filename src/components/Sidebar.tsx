@@ -10,13 +10,14 @@ import {
   Database,
   Radio,
   CheckCircle2,
-  Sliders
+  Sliders,
+  Palette
 } from 'lucide-react';
 import { ChatSession } from '@/types';
 
 interface SidebarProps {
-  currentTab: 'chat' | 'odoo' | 'channels' | 'mcp';
-  setCurrentTab: (tab: 'chat' | 'odoo' | 'channels' | 'mcp') => void;
+  currentTab: 'chat' | 'odoo' | 'channels' | 'mcp' | 'theme';
+  setCurrentTab: (tab: 'chat' | 'odoo' | 'channels' | 'mcp' | 'theme') => void;
   sessions: ChatSession[];
   activeSessionId: string;
   onSelectSession: (id: string) => void;
@@ -93,6 +94,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <Share2 className="w-4 h-4 text-emerald-400" />
           <span className="flex-1 text-left">WhatsApp & Telegram</span>
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+        </button>
+
+        <button
+          onClick={() => setCurrentTab('theme')}
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+            currentTab === 'theme'
+              ? 'bg-pink-500/15 text-pink-300 border border-pink-500/30 shadow-sm'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+          }`}
+        >
+          <Palette className="w-4 h-4 text-pink-400" />
+          <span className="flex-1 text-left">Theme & Branding</span>
+          <span className="text-[10px] px-1.5 py-0.2 rounded bg-pink-500/20 text-pink-300 font-mono">Live</span>
         </button>
 
         <button

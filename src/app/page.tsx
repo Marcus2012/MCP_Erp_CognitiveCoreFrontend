@@ -7,6 +7,7 @@ import { ChatContainer } from '@/components/ChatContainer';
 import { OdooWorkspace } from '@/components/OdooWorkspace';
 import { OmnichannelHub } from '@/components/OmnichannelHub';
 import { McpInspector } from '@/components/McpInspector';
+import { ThemeBrandingWorkspace } from '@/components/ThemeBrandingWorkspace';
 import { Message, ChatSession, OdooEntityPreview, ToolCall } from '@/types';
 import { sendMessageToAgent, checkBackendHealth } from '@/services/api';
 
@@ -32,7 +33,7 @@ const DEFAULT_SESSIONS: ChatSession[] = [
 ];
 
 export default function Home() {
-  const [currentTab, setCurrentTab] = useState<'chat' | 'odoo' | 'channels' | 'mcp'>('chat');
+  const [currentTab, setCurrentTab] = useState<'chat' | 'odoo' | 'channels' | 'mcp' | 'theme'>('chat');
   const [chatMode, setChatMode] = useState<'general' | 'odoo' | 'omnichannel'>('general');
   const [sessions, setSessions] = useState<ChatSession[]>(DEFAULT_SESSIONS);
   const [activeSessionId, setActiveSessionId] = useState<string>('session-1');
@@ -43,7 +44,7 @@ export default function Home() {
     {
       id: 'welcome-msg',
       role: 'assistant',
-      content: `¡Bienvenido a **Cognitive Core MCP Frontend**! 🚀\n\nConectado en vivo con **Odoo 20 Community (\`https://erp.cognitivecore.pe\`)** y canales de mensajería (**WhatsApp** y **Telegram**).\n\nPuedes pedirme consultar contactos, catálogo de productos/servicios, emitir presupuestos o enviar notificaciones.`,
+      content: `¡Bienvenido a **Cognitive Core MCP Frontend**! 🚀\n\nConectado en vivo con **Odoo 20 Community (\`https://erp.cognitivecore.pe\`)** y canales de mensajería (**WhatsApp** y **Telegram**).\n\nPuedes pedirme consultar contactos, catálogo de productos/servicios, personalizar el **Theme & Branding** o emitir presupuestos.`,
       timestamp: '10:00',
     },
   ]);
@@ -155,6 +156,11 @@ export default function Home() {
   };
 
   const handleOdooAction = (action: string, entity: OdooEntityPreview) => {
+    if (action === 'open_theme_editor') {
+      setCurrentTab('theme');
+      return;
+    }
+
     if (action === 'create_contact') {
       handleSendMessage(`Quiero registrar un nuevo contacto en Odoo 20 Community.`);
     } else if (action === 'export_whatsapp') {
@@ -213,6 +219,10 @@ export default function Home() {
 
           {currentTab === 'odoo' && (
             <OdooWorkspace onAskAgent={handleAskAgent} />
+          )}
+
+          {currentTab === 'theme' && (
+            <ThemeBrandingWorkspace onAskAgent={handleAskAgent} />
           )}
 
           {currentTab === 'channels' && (
