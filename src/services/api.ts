@@ -1,6 +1,14 @@
 import { Message, ToolCall, OdooEntityPreview, OdooPartner, OdooProduct, OdooSaleOrder, McpToolDefinition } from '@/types';
 
-const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_MCP_BACKEND_URL || 'http://localhost:8000';
+function getApiEndpoint(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  if (typeof window !== 'undefined') {
+    // In browser: use relative URL so Next.js rewrite proxy handles it with ZERO CORS issues
+    return normalizedPath;
+  }
+  const base = process.env.NEXT_PUBLIC_MCP_BACKEND_URL || 'http://127.0.0.1:8000';
+  return `${base}${normalizedPath}`;
+}
 
 export interface StreamCallbacks {
   onToken?: (token: string) => void;
@@ -13,7 +21,8 @@ export interface StreamCallbacks {
 // 1. Fetch Real Contacts from Odoo 20 via MCP Backend
 export async function fetchLiveContacts(search?: string, limit: number = 20): Promise<OdooPartner[]> {
   try {
-    const url = new URL(`${BACKEND_BASE_URL}/api/contacts`);
+    const endpoint = getApiEndpoint('/api/contacts');
+    const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8000');
     if (search) url.searchParams.append('search', search);
     url.searchParams.append('limit', limit.toString());
 
@@ -42,7 +51,8 @@ export async function fetchLiveContacts(search?: string, limit: number = 20): Pr
 // 2. Fetch Real Products from Odoo 20 via MCP Backend
 export async function fetchLiveProducts(search?: string, limit: number = 20): Promise<OdooProduct[]> {
   try {
-    const url = new URL(`${BACKEND_BASE_URL}/api/inventory/products`);
+    const endpoint = getApiEndpoint('/api/inventory/products');
+    const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8000');
     if (search) url.searchParams.append('search', search);
     url.searchParams.append('limit', limit.toString());
 
@@ -68,7 +78,8 @@ export async function fetchLiveProducts(search?: string, limit: number = 20): Pr
 // 3. Fetch Real Sales Orders from Odoo 20 via MCP Backend
 export async function fetchLiveOrders(partnerId?: number, limit: number = 20): Promise<OdooSaleOrder[]> {
   try {
-    const url = new URL(`${BACKEND_BASE_URL}/api/sales/orders`);
+    const endpoint = getApiEndpoint('/api/sales/orders');
+    const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8000');
     if (partnerId) url.searchParams.append('partner_id', partnerId.toString());
     url.searchParams.append('limit', limit.toString());
 
@@ -94,7 +105,8 @@ export async function fetchLiveOrders(partnerId?: number, limit: number = 20): P
 // 4. Fetch Real Invoices from Odoo 20 via MCP Backend
 export async function fetchLiveInvoices(limit: number = 20): Promise<any[]> {
   try {
-    const url = new URL(`${BACKEND_BASE_URL}/api/invoices`);
+    const endpoint = getApiEndpoint('/api/invoices');
+    const url = new URL(endpoint, typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8000');
     url.searchParams.append('limit', limit.toString());
 
     const res = await fetch(url.toString());
@@ -110,7 +122,8 @@ export async function fetchLiveInvoices(limit: number = 20): Promise<any[]> {
 // 5. Fetch MCP Registered Tools from Backend
 export async function fetchLiveMcpTools(): Promise<McpToolDefinition[]> {
   try {
-    const res = await fetch(`${BACKEND_BASE_URL}/api/mcp/tools`);
+    const endpoint = getApiEndpoint('/api/mcp/tools');
+    const res = await fetch(endpoint);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const tools = Array.isArray(data) ? data : (data.tools || []);
@@ -129,7 +142,8 @@ export async function fetchLiveMcpTools(): Promise<McpToolDefinition[]> {
 
 // 6. Execute direct MCP Tool on Live Backend
 export async function executeMcpToolLive(toolName: string, args: Record<string, any> = {}): Promise<any> {
-  const res = await fetch(`${BACKEND_BASE_URL}/api/mcp/tools/${encodeURIComponent(toolName)}/execute`, {
+  const endpoint = getApiEndpoint(`/api/mcp/tools/${encodeURIComponent(toolName)}/execute`);
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ arguments: args }),
@@ -144,7 +158,8 @@ export async function executeMcpToolLive(toolName: string, args: Record<string, 
 // 7. Check backend connection
 export async function checkBackendHealth(): Promise<{ online: boolean; odooConnected: boolean; details?: any }> {
   try {
-    const res = await fetch(`${BACKEND_BASE_URL}/api/health`, { signal: AbortSignal.timeout(2000) });
+    const endpoint = getApiEndpoint('/api/health');
+    const res = await fetch(endpoint, { signal: AbortSignal.timeout(2000) });
     if (!res.ok) return { online: false, odooConnected: false };
     const data = await res.json();
     return {
