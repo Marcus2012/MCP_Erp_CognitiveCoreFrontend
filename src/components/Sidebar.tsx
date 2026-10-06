@@ -79,7 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           <Database className="w-4 h-4 text-purple-400" />
           <span className="flex-1 text-left">Odoo ERP Workspace</span>
-          <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300">v17</span>
+          <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300">Odoo 20</span>
         </button>
 
         <button

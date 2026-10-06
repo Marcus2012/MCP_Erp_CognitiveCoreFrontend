@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Cognitive Core | MCP ERP & Omnichannel Copilot",
-  description: "AI Copilot connected to Odoo ERP, WhatsApp, and Telegram via Model Context Protocol (MCP)",
+  description: "AI Copilot connected to ERP, WhatsApp, and Telegram via Model Context Protocol (MCP)",
 };
 
 export default function RootLayout({

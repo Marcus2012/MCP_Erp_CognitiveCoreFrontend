@@ -23,10 +23,10 @@ interface ChatContainerProps {
 }
 
 const QUICK_PROMPTS = [
-  { label: '📦 Stock de Servidores en Odoo', prompt: '¿Cuál es el stock actual de Servidor Rack 2U Enterprise AI en Odoo?' },
-  { label: '📄 Crear Presupuesto SO', prompt: 'Crea un presupuesto en Odoo para el cliente Innova Tech Solutions por 2 Servidores AI' },
-  { label: '👥 Buscar Clientes en ERP', prompt: 'Busca los datos de contacto y total facturado del cliente Deco Addict SL' },
-  { label: '📱 Resumen por WhatsApp & Telegram', prompt: 'Verifica el estado de los canales de WhatsApp y Telegram para alertas' },
+  { label: '👥 Contactos Odoo 20', prompt: 'Dame la lista de contactos en Odoo 20 Community' },
+  { label: '📦 Catálogo & Servicios', prompt: 'Consulta el catálogo de productos y servicios registrados en Odoo' },
+  { label: '🔍 Buscar Contacto Real', prompt: 'Muestra los datos de contacto de Kevin Galarza y Willy Hinostroza' },
+  { label: '📱 Canales Omnicanal', prompt: 'Verifica el estado de los canales de WhatsApp y Telegram' },
 ];
 
 export const ChatContainer: React.FC<ChatContainerProps> = ({

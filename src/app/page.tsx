@@ -8,26 +8,26 @@ import { OdooWorkspace } from '@/components/OdooWorkspace';
 import { OmnichannelHub } from '@/components/OmnichannelHub';
 import { McpInspector } from '@/components/McpInspector';
 import { Message, ChatSession, OdooEntityPreview, ToolCall } from '@/types';
-import { sendMessageToAgent } from '@/services/api';
+import { sendMessageToAgent, checkBackendHealth } from '@/services/api';
 
 const DEFAULT_SESSIONS: ChatSession[] = [
   {
     id: 'session-1',
-    title: 'Consultas Odoo & Stock',
+    title: 'Consultas Odoo 20 Community',
     mode: 'odoo',
     createdAt: '06/10/2026',
-    updatedAt: '10:14',
-    messageCount: 3,
-    lastMessageSnippet: 'Presupuesto SO0504 generado...',
+    updatedAt: '10:00',
+    messageCount: 1,
+    lastMessageSnippet: 'Conexión activa con erp.cognitivecore.pe',
   },
   {
     id: 'session-2',
-    title: 'Soporte Clientes WhatsApp',
+    title: 'Hub Omnicanal WhatsApp & Telegram',
     mode: 'omnichannel',
     createdAt: '06/10/2026',
     updatedAt: '09:40',
-    messageCount: 5,
-    lastMessageSnippet: 'Mensaje enviado a Deco Addict SL...',
+    messageCount: 0,
+    lastMessageSnippet: 'Canales vinculados al ERP',
   },
 ];
 
@@ -37,17 +37,28 @@ export default function Home() {
   const [sessions, setSessions] = useState<ChatSession[]>(DEFAULT_SESSIONS);
   const [activeSessionId, setActiveSessionId] = useState<string>('session-1');
   const [backendOnline, setBackendOnline] = useState<boolean>(true);
-
+  
   // Active conversation state
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome-msg',
       role: 'assistant',
-      content: `¡Bienvenido a **Cognitive Core MCP Frontend**! 🚀\n\nEstoy conectado con tu backend para interactuar con **ERP Cognitive Core** y tus canales de comunicación (**WhatsApp** y **Telegram**).\n\nPuedes pedirme verificar inventario, emitir presupuestos de venta o enviar notificaciones a clientes.`,
+      content: `¡Bienvenido a **Cognitive Core MCP Frontend**! 🚀\n\nConectado en vivo con **Odoo 20 Community (\`https://erp.cognitivecore.pe\`)** y canales de mensajería (**WhatsApp** y **Telegram**).\n\nPuedes pedirme consultar contactos, catálogo de productos/servicios, emitir presupuestos o enviar notificaciones.`,
       timestamp: '10:00',
     },
   ]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  const verifyHealth = async () => {
+    const health = await checkBackendHealth();
+    setBackendOnline(health.online);
+  };
+
+  useEffect(() => {
+    verifyHealth();
+    const interval = setInterval(verifyHealth, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSendMessage = async (text: string) => {
     const userMsg: Message = {
@@ -107,11 +118,11 @@ export default function Home() {
             prev.map((m) =>
               m.id === assistantMsgId
                 ? {
-                  ...m,
-                  content: fullMsg.content,
-                  toolCalls: fullMsg.toolCalls || activeToolCalls,
-                  odooPreview: fullMsg.odooPreview,
-                }
+                    ...m,
+                    content: fullMsg.content,
+                    toolCalls: fullMsg.toolCalls || activeToolCalls,
+                    odooPreview: fullMsg.odooPreview,
+                  }
                 : m
             )
           );
@@ -130,7 +141,7 @@ export default function Home() {
     const newId = `session-${Date.now()}`;
     const newSession: ChatSession = {
       id: newId,
-      title: mode === 'odoo' ? 'Nueva Consulta Odoo' : mode === 'omnichannel' ? 'Nuevo Chat Omnicanal' : 'Nueva Conversación IA',
+      title: mode === 'odoo' ? 'Nueva Consulta Odoo 20' : mode === 'omnichannel' ? 'Nuevo Chat Omnicanal' : 'Nueva Conversación IA',
       mode,
       createdAt: new Date().toLocaleDateString('es-ES'),
       updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -144,14 +155,14 @@ export default function Home() {
   };
 
   const handleOdooAction = (action: string, entity: OdooEntityPreview) => {
-    if (action === 'confirm_so') {
-      handleSendMessage(`Confirmar y validar la orden de venta ${entity.name} en Odoo ERP.`);
-    } else if (action === 'send_whatsapp_doc') {
-      handleSendMessage(`Enviar el presupuesto en PDF de ${entity.name} por WhatsApp al contacto del cliente.`);
-    } else if (action === 'create_quote') {
-      handleSendMessage(`Generar un nuevo presupuesto para el producto ${entity.name} en Odoo.`);
+    if (action === 'create_contact') {
+      handleSendMessage(`Quiero registrar un nuevo contacto en Odoo 20 Community.`);
+    } else if (action === 'export_whatsapp') {
+      handleSendMessage(`Enviar ficha de contacto por WhatsApp.`);
+    } else if (action === 'create_so') {
+      handleSendMessage(`Generar un presupuesto en Odoo 20 para el servicio ${entity.name}.`);
     } else {
-      handleSendMessage(`Ejecutar acción "${action}" para la entidad ${entity.name} en Odoo.`);
+      handleSendMessage(`Ejecutar acción "${action}" para la entidad ${entity.name} en Odoo 20.`);
     }
     setCurrentTab('chat');
   };
@@ -163,7 +174,7 @@ export default function Home() {
 
   const handleRunToolDirect = (toolName: string) => {
     setCurrentTab('chat');
-    handleSendMessage(`Ejecuta la herramienta MCP "${toolName}" con parámetros de prueba y muestra el resultado.`);
+    handleSendMessage(`Ejecuta la herramienta MCP "${toolName}" en Odoo 20 y muestra el resultado.`);
   };
 
   return (
@@ -185,7 +196,7 @@ export default function Home() {
           currentTab={currentTab}
           chatMode={chatMode}
           setChatMode={setChatMode}
-          onRefreshBackend={() => setBackendOnline(true)}
+          onRefreshBackend={verifyHealth}
           backendOnline={backendOnline}
         />
 

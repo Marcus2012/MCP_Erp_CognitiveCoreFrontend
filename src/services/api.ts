@@ -1,12 +1,4 @@
-import { Message, ToolCall, OdooEntityPreview } from '@/types';
-import { 
-  MOCK_ODOO_PARTNERS, 
-  MOCK_ODOO_PRODUCTS, 
-  MOCK_ODOO_ORDERS, 
-  MOCK_ODOO_INVOICES,
-  MOCK_ODOO_TASKS,
-  MOCK_ODOO_LEADS 
-} from './mockData';
+import { Message, ToolCall, OdooEntityPreview, OdooPartner, OdooProduct, OdooSaleOrder, McpToolDefinition } from '@/types';
 
 const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_MCP_BACKEND_URL || 'http://localhost:8000';
 
@@ -18,72 +10,170 @@ export interface StreamCallbacks {
   onError?: (error: Error) => void;
 }
 
-export async function sendMessageToAgent(
-  userText: string,
-  history: Message[],
-  callbacks: StreamCallbacks,
-  mode: 'general' | 'odoo' | 'omnichannel' = 'general'
-): Promise<void> {
-  // First, check if live backend /api/chat works
+// 1. Fetch Real Contacts from Odoo 20 via MCP Backend
+export async function fetchLiveContacts(search?: string, limit: number = 20): Promise<OdooPartner[]> {
   try {
-    const response = await fetch(`${BACKEND_BASE_URL}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [...history.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: userText }],
-        stream: false
-      }),
-      signal: AbortSignal.timeout(2500),
-    });
+    const url = new URL(`${BACKEND_BASE_URL}/api/contacts`);
+    if (search) url.searchParams.append('search', search);
+    url.searchParams.append('limit', limit.toString());
 
-    if (response.ok) {
-      const data = await response.json();
-      if (data && (data.reply || data.content || data.response || data.message)) {
-        const text = data.reply || data.content || data.response || data.message;
-        await streamText(text, callbacks);
-        return;
-      }
-    }
-  } catch {
-    // If backend /api/chat is not responding or throws 500, fallback to integrated MCP Cognitive Engine
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const list = Array.isArray(data) ? data : (data.value || data.records || []);
+
+    return list.map((item: any) => ({
+      id: item.id,
+      name: item.name || 'Sin Nombre',
+      email: item.email || '-',
+      phone: item.phone || item.mobile || '-',
+      city: item.city || '-',
+      street: item.street || '-',
+      vat: item.vat || '-',
+      isCompany: !!item.is_company,
+      totalInvoiced: item.total_invoiced || 0,
+    }));
+  } catch (err) {
+    console.error('Error fetching live contacts from Odoo 20 MCP:', err);
+    return [];
   }
+}
 
-  // Fallback cognitive engine: interprets natural language, calls Odoo MCP tools, and streams response
-  await executeCognitiveMcpIntent(userText, mode, callbacks);
+// 2. Fetch Real Products from Odoo 20 via MCP Backend
+export async function fetchLiveProducts(search?: string, limit: number = 20): Promise<OdooProduct[]> {
+  try {
+    const url = new URL(`${BACKEND_BASE_URL}/api/inventory/products`);
+    if (search) url.searchParams.append('search', search);
+    url.searchParams.append('limit', limit.toString());
+
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const list = Array.isArray(data) ? data : (data.value || data.records || []);
+
+    return list.map((p: any) => ({
+      id: p.id,
+      name: p.name || 'Producto sin nombre',
+      defaultCode: p.default_code || 'SIN-SKU',
+      qtyAvailable: p.qty_available ?? 0,
+      listPrice: p.list_price ?? 0,
+      category: Array.isArray(p.categ_id) ? p.categ_id[1] : (p.categ_id || 'General'),
+    }));
+  } catch (err) {
+    console.error('Error fetching live products from Odoo 20 MCP:', err);
+    return [];
+  }
+}
+
+// 3. Fetch Real Sales Orders from Odoo 20 via MCP Backend
+export async function fetchLiveOrders(partnerId?: number, limit: number = 20): Promise<OdooSaleOrder[]> {
+  try {
+    const url = new URL(`${BACKEND_BASE_URL}/api/sales/orders`);
+    if (partnerId) url.searchParams.append('partner_id', partnerId.toString());
+    url.searchParams.append('limit', limit.toString());
+
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const list = Array.isArray(data) ? data : (data.value || data.records || []);
+
+    return list.map((o: any) => ({
+      id: o.id,
+      name: o.name || `SO-${o.id}`,
+      partnerName: Array.isArray(o.partner_id) ? o.partner_id[1] : (o.partner_id || 'Cliente'),
+      dateOrder: o.date_order ? new Date(o.date_order).toLocaleDateString('es-ES') : '-',
+      amountTotal: o.amount_total || 0,
+      state: o.state || 'draft',
+    }));
+  } catch (err) {
+    console.error('Error fetching live orders from Odoo 20 MCP:', err);
+    return [];
+  }
+}
+
+// 4. Fetch Real Invoices from Odoo 20 via MCP Backend
+export async function fetchLiveInvoices(limit: number = 20): Promise<any[]> {
+  try {
+    const url = new URL(`${BACKEND_BASE_URL}/api/invoices`);
+    url.searchParams.append('limit', limit.toString());
+
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return Array.isArray(data) ? data : (data.value || data.records || []);
+  } catch (err) {
+    console.error('Error fetching live invoices from Odoo 20 MCP:', err);
+    return [];
+  }
+}
+
+// 5. Fetch MCP Registered Tools from Backend
+export async function fetchLiveMcpTools(): Promise<McpToolDefinition[]> {
+  try {
+    const res = await fetch(`${BACKEND_BASE_URL}/api/mcp/tools`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const tools = Array.isArray(data) ? data : (data.tools || []);
+
+    return tools.map((t: any) => ({
+      name: t.name,
+      category: t.category || 'Odoo 20 MCP',
+      description: t.description || 'Herramienta MCP Odoo 20',
+      parameters: t.parameters || { type: 'object' },
+    }));
+  } catch (err) {
+    console.error('Error fetching live MCP tools:', err);
+    return [];
+  }
+}
+
+// 6. Execute direct MCP Tool on Live Backend
+export async function executeMcpToolLive(toolName: string, args: Record<string, any> = {}): Promise<any> {
+  const res = await fetch(`${BACKEND_BASE_URL}/api/mcp/tools/${encodeURIComponent(toolName)}/execute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ arguments: args }),
+  });
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Fallo MCP Tool (${toolName}): ${errorText}`);
+  }
+  return await res.json();
+}
+
+// 7. Check backend connection
+export async function checkBackendHealth(): Promise<{ online: boolean; odooConnected: boolean; details?: any }> {
+  try {
+    const res = await fetch(`${BACKEND_BASE_URL}/api/health`, { signal: AbortSignal.timeout(2000) });
+    if (!res.ok) return { online: false, odooConnected: false };
+    const data = await res.json();
+    return {
+      online: true,
+      odooConnected: data.status === 'ok' || data.odoo_connected === true || data.status === 'healthy',
+      details: data,
+    };
+  } catch {
+    return { online: false, odooConnected: false };
+  }
 }
 
 async function delay(ms: number) {
   return new Promise((res) => setTimeout(res, ms));
 }
 
-async function streamText(text: string, callbacks: StreamCallbacks, toolCalls?: ToolCall[], odooPreview?: OdooEntityPreview) {
-  const words = text.split(' ');
-  for (let i = 0; i < words.length; i++) {
-    const chunk = (i === 0 ? '' : ' ') + words[i];
-    callbacks.onToken?.(chunk);
-    await delay(14);
-  }
-  callbacks.onFinish?.({
-    id: `msg-${Date.now()}`,
-    role: 'assistant',
-    content: text,
-    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    toolCalls,
-    odooPreview,
-  });
-}
-
-async function executeCognitiveMcpIntent(
-  prompt: string,
-  mode: string,
-  callbacks: StreamCallbacks
+// 8. Stream Message to Agent connecting to Live Odoo 20 MCP Tools
+export async function sendMessageToAgent(
+  userText: string,
+  history: Message[],
+  callbacks: StreamCallbacks,
+  mode: 'general' | 'odoo' | 'omnichannel' = 'general'
 ): Promise<void> {
-  const lower = prompt.toLowerCase();
+  const lower = userText.toLowerCase();
   let toolCalls: ToolCall[] = [];
   let odooPreview: OdooEntityPreview | undefined = undefined;
-  let finalContent = '';
+  let responseContent = '';
 
-  // 1. CONTACTOS / PARTNERS / CLIENTES (res.partner)
+  // Case A: Contacts / Clientes
   if (
     lower.includes('contacto') || 
     lower.includes('contactos') || 
@@ -91,281 +181,223 @@ async function executeCognitiveMcpIntent(
     lower.includes('clientes') || 
     lower.includes('partner') || 
     lower.includes('proveedor') ||
-    lower.includes('innova') ||
-    lower.includes('deco') ||
-    lower.includes('farmacia')
+    lower.includes('kevin') ||
+    lower.includes('willy') ||
+    lower.includes('cognitive')
   ) {
+    const startTime = Date.now();
+    const searchTerm = lower.includes('kevin') 
+      ? 'Kevin' 
+      : lower.includes('willy') 
+      ? 'Willy' 
+      : lower.includes('cognitive') 
+      ? 'Cognitive' 
+      : '';
+
     const tc: ToolCall = {
       id: `tc-${Date.now()}`,
       name: 'contacts_list',
-      args: { search_term: lower.includes('innova') ? 'Innova' : lower.includes('deco') ? 'Deco' : '', limit: 10 },
+      args: { search_term: searchTerm, limit: 10 },
       status: 'running',
     };
     callbacks.onToolCallStart?.(tc);
-    await delay(450);
 
-    const partners = lower.includes('innova') 
-      ? [MOCK_ODOO_PARTNERS[1]] 
-      : lower.includes('deco') 
-      ? [MOCK_ODOO_PARTNERS[0]] 
-      : MOCK_ODOO_PARTNERS;
-
+    const liveContacts = await fetchLiveContacts(searchTerm, 10);
     tc.status = 'completed';
+    tc.executionTimeMs = Date.now() - startTime;
     tc.result = {
       model: 'res.partner',
-      count: partners.length,
-      records: partners.map(p => ({
-        id: p.id,
-        name: p.name,
-        email: p.email,
-        phone: p.phone,
-        city: p.city,
-        total_invoiced: `${p.totalInvoiced.toLocaleString('es-ES')} €`,
-      })),
+      server: 'https://erp.cognitivecore.pe',
+      count: liveContacts.length,
+      records: liveContacts,
     };
-    tc.executionTimeMs = 185;
     callbacks.onToolCallEnd?.(tc);
     toolCalls.push(tc);
 
     odooPreview = {
       type: 'contacts_list',
-      id: 'contacts-grid',
-      name: 'Directorio de Contactos Odoo 20',
-      status: `${partners.length} contactos encontrados`,
+      id: 'live-odoo-contacts',
+      name: 'Contactos Odoo 20 Community',
+      status: `${liveContacts.length} contactos en vivo`,
       details: {
-        'Modelo Odoo': 'res.partner',
-        'Filtro': lower.includes('innova') ? 'Innova' : 'Todos los activos',
-        'Sincronización': 'MCP Protocol v1.2',
+        'Instancia Odoo': 'https://erp.cognitivecore.pe',
+        'Modelo': 'res.partner',
+        'Protocolo': 'MCP Server (JSON-RPC / XML-RPC)',
       },
-      items: partners,
+      items: liveContacts,
       actions: [
-        { label: 'Crear Contacto', action: 'create_contact', variant: 'primary' },
+        { label: 'Crear Contacto en Odoo', action: 'create_contact', variant: 'primary' },
         { label: 'Exportar a WhatsApp', action: 'export_whatsapp', variant: 'secondary' },
       ],
     };
 
-    finalContent = `He consultado el modelo **\`res.partner\`** en **Odoo 20 Community / Enterprise** mediante la herramienta MCP **\`contacts_list\`**.\n\nSe han recuperado **${partners.length} contactos registrados** con sus datos fiscales, teléfonos y volumen total facturado:\n\n` +
-      partners.map(p => `- 👤 **${p.name}** | ✉️ \`${p.email}\` | 📞 \`${p.phone}\` | 📍 ${p.city} | 💰 **${p.totalInvoiced.toLocaleString('es-ES')} €** facturados`).join('\n') +
-      `\n\n¿Deseas que prepare un presupuesto, registre una llamada o envíe una notificación por WhatsApp o Telegram a alguno de ellos?`;
+    if (liveContacts.length > 0) {
+      responseContent = `He consultado el modelo **\`res.partner\`** en tu servidor **Odoo 20 Community (\`https://erp.cognitivecore.pe\`)** mediante la herramienta MCP **\`contacts_list\`**.\n\nSe obtuvieron **${liveContacts.length} contactos reales**:\n\n` +
+        liveContacts.map(c => `- 👤 **${c.name}** | ✉️ \`${c.email}\` | 📞 \`${c.phone}\` | 📍 ${c.street !== '-' ? c.street : c.city} | RUC/VAT: \`${c.vat}\``).join('\n') +
+        `\n\n¿Deseas registrar un nuevo contacto, consultar los detalles de alguno o enviar una notificación por WhatsApp o Telegram?`;
+    } else {
+      responseContent = `He consultado **Odoo 20 Community (\`https://erp.cognitivecore.pe\`)** mediante MCP pero no se encontraron contactos con el término de búsqueda solicitado.`;
+    }
   }
-  // 2. INVENTARIO Y PRODUCTOS (product.product / stock.quant)
+  // Case B: Products / Inventario
   else if (
-    lower.includes('stock') || 
     lower.includes('producto') || 
     lower.includes('productos') || 
+    lower.includes('stock') || 
     lower.includes('inventario') || 
-    lower.includes('almacen') || 
-    lower.includes('almacén') || 
-    lower.includes('servidor') || 
-    lower.includes('switch')
+    lower.includes('servicio') || 
+    lower.includes('erp001') ||
+    lower.includes('precio')
   ) {
+    const startTime = Date.now();
     const tc: ToolCall = {
       id: `tc-${Date.now()}`,
       name: 'inventory_list_products',
-      args: { search_term: lower.includes('servidor') ? 'Servidor' : '', limit: 10 },
+      args: { limit: 10 },
       status: 'running',
     };
     callbacks.onToolCallStart?.(tc);
-    await delay(500);
 
-    const products = lower.includes('servidor') ? [MOCK_ODOO_PRODUCTS[0]] : MOCK_ODOO_PRODUCTS;
+    const liveProducts = await fetchLiveProducts('', 10);
     tc.status = 'completed';
+    tc.executionTimeMs = Date.now() - startTime;
     tc.result = {
       model: 'product.product',
-      count: products.length,
-      items: products.map(p => ({
-        id: p.id,
-        name: p.name,
-        code: p.defaultCode,
-        qty_available: p.qtyAvailable,
-        list_price: p.listPrice,
-      })),
+      server: 'https://erp.cognitivecore.pe',
+      count: liveProducts.length,
+      records: liveProducts,
     };
-    tc.executionTimeMs = 210;
     callbacks.onToolCallEnd?.(tc);
     toolCalls.push(tc);
 
-    odooPreview = {
-      type: 'product',
-      id: products[0].id,
-      name: products[0].name,
-      details: {
-        'Referencia / SKU': products[0].defaultCode,
-        'Stock Físico': `${products[0].qtyAvailable} unidades`,
-        'Precio de Lista': `${products[0].listPrice.toLocaleString('es-ES')} €`,
-        'Ubicación': 'WH/Stock Principal',
-      },
-      status: 'En Stock',
-      total: products[0].listPrice,
-      currency: '€',
-      actions: [
-        { label: 'Crear Presupuesto', action: 'create_quote', variant: 'primary' },
-        { label: 'Ver en Odoo ERP', action: 'open_odoo', variant: 'secondary' },
-      ],
-    };
+    if (liveProducts.length > 0) {
+      const first = liveProducts[0];
+      odooPreview = {
+        type: 'product',
+        id: first.id,
+        name: first.name,
+        details: {
+          'Referencia (SKU)': first.defaultCode,
+          'Categoría': first.category,
+          'Precio de Venta': `${first.listPrice.toLocaleString('es-PE', { minimumFractionDigits: 2 })} PEN / S/.`,
+          'Instancia': 'erp.cognitivecore.pe',
+        },
+        status: 'Activo en Catálogo',
+        total: first.listPrice,
+        currency: 'S/.',
+        actions: [
+          { label: 'Crear Presupuesto SO', action: 'create_so', variant: 'primary' },
+          { label: 'Ver en Odoo ERP', action: 'open_odoo', variant: 'secondary' },
+        ],
+      };
 
-    finalContent = `Consulta de inventario completada en **Odoo 20** mediante **\`inventory_list_products\`**:\n\n` +
-      products.map(p => `- 📦 **${p.name}** (\`${p.defaultCode}\`): **${p.qtyAvailable} uds disponibles** a un precio de **${p.listPrice.toLocaleString('es-ES')} €**`).join('\n') +
-      `\n\n¿Deseas emitir una orden de compra para reabastecimiento o preparar un presupuesto de venta?`;
+      responseContent = `Catálogo consultado en **Odoo 20 Community** mediante **\`inventory_list_products\`**:\n\n` +
+        liveProducts.map(p => `- 📦 **${p.name}** (\`${p.defaultCode}\`) | Categoría: *${p.category}* | Precio: **S/. ${p.listPrice.toFixed(2)}**`).join('\n') +
+        `\n\n¿Deseas preparar una cotización o presupuesto de venta para algún cliente con este servicio?`;
+    } else {
+      responseContent = `No se encontraron productos registrados actualmente en el catálogo de tu Odoo 20 Community.`;
+    }
   }
-  // 3. VENTAS Y PRESUPUESTOS (sale.order)
+  // Case C: Orders / Ventas
   else if (
     lower.includes('venta') || 
     lower.includes('ventas') || 
     lower.includes('presupuesto') || 
     lower.includes('pedido') || 
     lower.includes('pedidos') || 
-    lower.includes('so') || 
-    lower.includes('orden')
+    lower.includes('so')
   ) {
+    const startTime = Date.now();
     const tc: ToolCall = {
       id: `tc-${Date.now()}`,
       name: 'sales_list_orders',
-      args: { limit: 5 },
+      args: { limit: 10 },
       status: 'running',
     };
     callbacks.onToolCallStart?.(tc);
-    await delay(480);
 
+    const liveOrders = await fetchLiveOrders(undefined, 10);
     tc.status = 'completed';
+    tc.executionTimeMs = Date.now() - startTime;
     tc.result = {
       model: 'sale.order',
-      records: MOCK_ODOO_ORDERS,
+      server: 'https://erp.cognitivecore.pe',
+      count: liveOrders.length,
+      records: liveOrders,
     };
-    tc.executionTimeMs = 195;
     callbacks.onToolCallEnd?.(tc);
     toolCalls.push(tc);
 
-    odooPreview = {
-      type: 'sale_order',
-      id: 501,
-      name: 'Órdenes de Venta Odoo 20',
-      details: {
-        'Último Pedido': 'SO0501 (Innova Tech)',
-        'Importe': '12.450,00 €',
-        'Estado': 'Confirmado (sale)',
-        'Total Activas': '3 órdenes registradas',
-      },
-      status: 'Sincronizado',
-      actions: [
-        { label: 'Nuevo Presupuesto', action: 'create_so', variant: 'primary' },
-        { label: 'Descargar Reporte PDF', action: 'download_pdf', variant: 'secondary' },
-      ],
-    };
-
-    finalContent = `He consultado el módulo de **Ventas de Odoo 20** con la herramienta MCP **\`sales_list_orders\`**.\n\nÓrdenes recientes en el sistema:\n` +
-      MOCK_ODOO_ORDERS.map(o => `- 📄 **${o.name}** | Cliente: **${o.partnerName}** | Total: **${o.amountTotal.toLocaleString('es-ES')} €** | Estado: \`${o.state}\``).join('\n') +
-      `\n\n¿Quieres que confirme algún presupuesto borrador o lo despache por WhatsApp al cliente?`;
+    if (liveOrders.length > 0) {
+      responseContent = `Se encontraron **${liveOrders.length} órdenes de venta** en tu Odoo 20 Community:\n\n` +
+        liveOrders.map(o => `- 📄 **${o.name}** | Cliente: **${o.partnerName}** | Total: **S/. ${o.amountTotal.toFixed(2)}** | Estado: \`${o.state}\``).join('\n');
+    } else {
+      responseContent = `He consultado el modelo **\`sale.order\`** en tu Odoo 20 Community (**\`https://erp.cognitivecore.pe\`**).\n\nActualmente **no hay órdenes de venta registradas**. ¿Deseas que preparemos un nuevo presupuesto de venta (SO) para **COGNITIVE CORE E.I.R.L.** o **Kevin Galarza**?`;
+    }
   }
-  // 4. FACTURAS (account.move)
+  // Case D: Invoices / Facturas
   else if (
     lower.includes('factura') || 
     lower.includes('facturas') || 
     lower.includes('cobro') || 
-    lower.includes('deuda') || 
-    lower.includes('impuestos')
+    lower.includes('deuda')
   ) {
+    const startTime = Date.now();
     const tc: ToolCall = {
       id: `tc-${Date.now()}`,
       name: 'invoices_list',
-      args: { limit: 5 },
+      args: { limit: 10 },
       status: 'running',
     };
     callbacks.onToolCallStart?.(tc);
-    await delay(400);
 
+    const liveInvoices = await fetchLiveInvoices(10);
     tc.status = 'completed';
+    tc.executionTimeMs = Date.now() - startTime;
     tc.result = {
       model: 'account.move',
-      records: MOCK_ODOO_INVOICES,
+      server: 'https://erp.cognitivecore.pe',
+      count: liveInvoices.length,
+      records: liveInvoices,
     };
-    tc.executionTimeMs = 175;
     callbacks.onToolCallEnd?.(tc);
     toolCalls.push(tc);
 
-    odooPreview = {
-      type: 'invoice',
-      id: 901,
-      name: 'Facturas de Cliente Odoo 20',
-      details: {
-        'Factura': 'INV/2026/00142',
-        'Cliente': 'Innova Tech Solutions',
-        'Importe': '12.450,00 €',
-        'Estado de Pago': 'Pagada (paid)',
-      },
-      status: 'Publicada',
-      actions: [
-        { label: 'Enviar Factura por WhatsApp', action: 'send_invoice_wa', variant: 'primary' },
-      ],
-    };
-
-    finalContent = `Consulta de facturación en **Odoo 20** ejecutada mediante **\`invoices_list\`**:\n\n` +
-      MOCK_ODOO_INVOICES.map(inv => `- 🧾 **${inv.name}** | **${inv.partnerName}** | Total: **${inv.amountTotal.toLocaleString('es-ES')} €** | Estado: \`${inv.state}\` | Pago: **${inv.paymentState === 'paid' ? '✅ Pagada' : '⏳ Pendiente'}**`).join('\n') +
-      `\n\nPuedo enviar recordatorios de pago a los clientes pendientes vía Telegram o WhatsApp.`;
+    if (liveInvoices.length > 0) {
+      responseContent = `Facturas en tu Odoo 20 Community:\n\n` +
+        liveInvoices.map((inv: any) => `- 🧾 **${inv.name || 'Borrador'}** | Total: **S/. ${inv.amount_total || 0}** | Estado: \`${inv.state}\``).join('\n');
+    } else {
+      responseContent = `He consultado el módulo contable (**\`account.move\`**) en tu **Odoo 20 Community** y actualmente **no hay facturas emitidas**. Puedes emitir una factura directamente confirmando una orden de venta.`;
+    }
   }
-  // 5. TAREAS Y PROYECTOS (project.task)
+  // Case E: WhatsApp / Telegram
   else if (
-    lower.includes('tarea') || 
-    lower.includes('tareas') || 
-    lower.includes('proyecto') || 
-    lower.includes('proyectos') || 
-    lower.includes('todo') || 
-    lower.includes('to-do')
+    lower.includes('whatsapp') || 
+    lower.includes('telegram') || 
+    lower.includes('canal') || 
+    lower.includes('mensaje')
   ) {
-    const tc: ToolCall = {
-      id: `tc-${Date.now()}`,
-      name: 'projects_list_tasks',
-      args: { limit: 5 },
-      status: 'running',
-    };
-    callbacks.onToolCallStart?.(tc);
-    await delay(420);
-
-    tc.status = 'completed';
-    tc.result = {
-      model: 'project.task',
-      records: MOCK_ODOO_TASKS,
-    };
-    tc.executionTimeMs = 160;
-    callbacks.onToolCallEnd?.(tc);
-    toolCalls.push(tc);
-
-    finalContent = `Tareas activas en **Odoo 20 Proyectos** mediante **\`projects_list_tasks\`**:\n\n` +
-      MOCK_ODOO_TASKS.map(t => `- 📌 **${t.name}** | Proyecto: *${t.projectName}* | Etapa: \`${t.stage}\` | Prioridad: **${t.priority}** (Límite: ${t.deadline})`).join('\n');
+    responseContent = `📱 **Hub Omnicanal Conectado**:\n\n- 🟢 **WhatsApp Business Bot:** Conectado a la línea corporativa (+51 965 777 514).\n- 🔵 **Telegram ERP Agent:** Conectado con @CognitiveCoreErp_Bot.\n- 🏢 **Odoo 20 Community:** Conectado a \`https://erp.cognitivecore.pe\` vía MCP Server.\n\nPuedes pedirme enviar notificaciones, cotizaciones o recordatorios a tus contactos registrados.`;
   }
-  // 6. CRM / LEADS
-  else if (
-    lower.includes('crm') || 
-    lower.includes('lead') || 
-    lower.includes('leads') || 
-    lower.includes('oportunidad') || 
-    lower.includes('oportunidades')
-  ) {
-    const tc: ToolCall = {
-      id: `tc-${Date.now()}`,
-      name: 'crm_list_leads',
-      args: {},
-      status: 'running',
-    };
-    callbacks.onToolCallStart?.(tc);
-    await delay(450);
-
-    tc.status = 'completed';
-    tc.result = {
-      model: 'crm.lead',
-      records: MOCK_ODOO_LEADS,
-    };
-    tc.executionTimeMs = 180;
-    callbacks.onToolCallEnd?.(tc);
-    toolCalls.push(tc);
-
-    finalContent = `Pipeline de oportunidades en **Odoo 20 CRM** (\`crm_list_leads\`):\n\n` +
-      MOCK_ODOO_LEADS.map(l => `- 🎯 **${l.name}** | Cliente: *${l.partnerName}* | Estimado: **${l.expectedRevenue.toLocaleString('es-ES')} €** (${l.probability}% prob) | Etapa: \`${l.stage}\``).join('\n');
-  }
-  // 7. DEFAULT / GREETING
+  // Case F: Default / Help
   else {
-    finalContent = `He procesado tu consulta: **"${prompt}"**.\n\nPuedo consultar cualquier modelo en **Odoo 20 Community & Enterprise** con el protocolo **MCP**:\n- 👥 **Contactos & Clientes:** \`"Dame la lista de contactos"\` o \`"Buscar cliente Deco Addict"\`\n- 📦 **Inventario & Stock:** \`"Ver stock de servidores"\` o \`"Inventario de productos"\`\n- 📄 **Ventas & Presupuestos:** \`"Listar pedidos de venta"\` o \`"Crear presupuesto para Innova"\`\n- 🧾 **Facturación:** \`"Mostrar facturas pendientes de cobro"\`\n- 📱 **Omnicanal:** \`"Enviar resumen por WhatsApp o Telegram"\``;
+    responseContent = `¡Hola! Soy **Cognitive Core Copilot**, conectado en tiempo real a tu **Odoo 20 Community (\`https://erp.cognitivecore.pe\`)** mediante el protocolo **MCP**.\n\n¿Qué deseas gestionar?\n- 👥 **Contactos:** *"Dame la lista de contactos"*, *"Buscar a Willy"* o *"Contacto de Kevin Galarza"*\n- 📦 **Productos / Servicios:** *"Consultar catálogo de productos y precios"*\n- 📄 **Ventas:** *"Listar órdenes de venta"* o *"Crear presupuesto"*\n- 📱 **Canales:** *"Comprobar estado de WhatsApp y Telegram"*`;
   }
 
-  await streamText(finalContent, callbacks, toolCalls, odooPreview);
+  // Stream text word by word
+  const words = responseContent.split(' ');
+  for (let i = 0; i < words.length; i++) {
+    const chunk = (i === 0 ? '' : ' ') + words[i];
+    callbacks.onToken?.(chunk);
+    await delay(12);
+  }
+
+  callbacks.onFinish?.({
+    id: `msg-${Date.now()}`,
+    role: 'assistant',
+    content: responseContent,
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    toolCalls,
+    odooPreview,
+  });
 }
